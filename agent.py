@@ -31,17 +31,26 @@ class Planner():
         action = np.array([
             [np.nan, np.nan, 0],  # serviceTime
             [0, 0, 0],  # orderToSupplier
+            [np.nan, np.nan, np.nan] # reorderPoint
         ])
 
         return action
 
-    def chooseRandomAction(self, state):
+    def chooseRandomAction(self, state, demand):
         # initiate action
         action = self.resetAction()
 
         # state, action of every nodes
+        retailerState = state[:, 2]
         retailerAction = action[:, 2]
+
+        # fixed order
         retailerAction[1] = self.retailerOrder
+        # try random retailerAction
+        # retailerMaxOrder = retailerState[6] - retailerState[0]  # capacity - current inventory
+        # retailerInventoryLack = max(0, demand - retailerState[0])  # gap between customer order and inventory
+        # retailerAction[1] = np.random.choice(range(int(retailerInventoryLack), retailerMaxOrder))
+
         s1State = state[:, 1]
         s1Action = action[:, 1]
         s0State = state[:, 0]
@@ -64,17 +73,22 @@ class Planner():
         s0Action[0] = 0 + s0State[5] if s0State[0] < s1Action[1] else 0
         s1Action[0] = s0Action[0] + s1State[5] if s1State[0] < retailerAction[1] else 0
 
+        # choose reorder point for next cycle
+        # reorder point up to capacity
+        # retailerAction[2] = np.random.choice(range(retailerState[6])) # 0 to max capacity
+        # reorder point up to new inventory position
+        newInventoryPosition = int(retailerAction[1] + retailerState[0])
+        retailerAction[2] = np.random.choice(range(newInventoryPosition))
+
         return action
 
-    def chooseGreedyAction(self, state):
-        # return self.chooseRandomAction(state)
-
+    def chooseGreedyAction(self, state, demand):
         # initiate action
         action = self.resetAction()
 
         # state, action of every nodes
+        retailerState = state[:, 2]
         retailerAction = action[:, 2]
-        retailerAction[1] = self.retailerOrder
         s1State = state[:, 1]
         s1Action = action[:, 1]
         s0State = state[:, 0]
@@ -88,18 +102,23 @@ class Planner():
         suppliersOrders = qlearning.key2array(listActions)
         s0Action[1] = suppliersOrders[0]
         s1Action[1] = suppliersOrders[1]
+        retailerAction[1] = suppliersOrders[2]
+
+        # get reorderPoint
+        retailerAction[2] = suppliersOrders[3]
 
         # if supplier's inventory > demand, serviceTime = 0
         s0Action[0] = 0 + s0State[5] if s0State[0] < s1Action[1] else 0
         s1Action[0] = s0Action[0] + s1State[5] if s1State[0] < retailerAction[1] else 0
+        retailerAction[0] = 0 # always 0 service time
 
         return action
 
-    def takeAction(self, state):
+    def takeAction(self, state, demand):
         # epsilon-greedy
         # explore
         if np.random.uniform() < self.epsilon:
-            action = self.chooseRandomAction(state)
+            action = self.chooseRandomAction(state, demand)
         # exploit
         else:
             # choose maximum with random tie braking if multiple maximum
@@ -108,9 +127,9 @@ class Planner():
 
             # if unknown actions
             if len(actionsList) == 0:
-                action = self.chooseRandomAction(state)
+                action = self.chooseRandomAction(state, demand)
             else:
-                action = self.chooseGreedyAction(state)
+                action = self.chooseGreedyAction(state, demand)
 
         return action
 
@@ -120,7 +139,10 @@ class Planner():
         # train q for old state and action in the next actionTrigger
         if (oldState is not None) & (oldAction is not None):
             old_s = qlearning.array2key(oldState[0][:2]) # inventory
-            old_a = qlearning.array2key(oldAction[1][:2]) # order quantity
+
+            # action = [order qty] + [reorderPoint]
+            a = np.append(oldAction[1], oldAction[2, 2])
+            old_a = qlearning.array2key(a) # order quantity
 
             actionsList = self.q.getActions(new_s)
             _, maxQ = qlearning.getMaxDict(actionsList)

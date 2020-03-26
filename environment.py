@@ -49,7 +49,7 @@ class Environment():
         reward = 0
         reward -= newState[4, 2] * self.envParams["stockoutCost"]  # total stockouts this period x stockoutPrice
         reward -= (newState[0, 0] * self.envParams["inventoryCost"][0] + newState[0, 1] * self.envParams["inventoryCost"][1])  # inventory
-        # reward -= state[0, 2] * self.envParams["inventoryCost"][2] # include unused safety stock at retailer
+        reward -= newState[0, 2] * self.envParams["inventoryCost"][2] # include unused safety stock at retailer
 
         return (newState, actionTrigger, reward)
 
@@ -72,6 +72,9 @@ class Environment():
         s0State[3] = 0 + s0State[5]  # s0 has 0 supplier serviceTime
         s1State[3] = s0Action[0] + s1State[5]
         retailerState[3] = s1Action[0]
+
+        # set next reorder point
+        newState[1, 2] = action[2, 2]
 
         # reset stockout
         newState[4] = 0

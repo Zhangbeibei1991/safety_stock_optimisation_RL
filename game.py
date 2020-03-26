@@ -64,7 +64,7 @@ def runEpisode(envParams, plannerAgent, train=True):
         # check if action can be taken
         if actionTrigger:
             # planner decides action
-            action = plannerAgent.takeAction(state1)
+            action = plannerAgent.takeAction(state1, demand)
 
             # try:
             #     assert state1[0, 0] + action[1, 0] >= action[1, 1]
