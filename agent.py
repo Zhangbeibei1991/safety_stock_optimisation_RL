@@ -96,7 +96,7 @@ class Planner():
 
         # pick maximum action and convert to array
         # get inventory as state
-        s = qlearning.array2key(state[0][:2])
+        s = qlearning.array2key(state[0])
         listActions, _ = qlearning.getMaxDict(self.q.getActions(s))
         # get suppliersOrders
         suppliersOrders = qlearning.key2array(listActions)
@@ -122,7 +122,7 @@ class Planner():
         # exploit
         else:
             # choose maximum with random tie braking if multiple maximum
-            s = qlearning.array2key(state[0][:2])
+            s = qlearning.array2key(state[0])
             actionsList = self.q.getActions(s)
 
             # if unknown actions
@@ -134,11 +134,11 @@ class Planner():
         return action
 
     def train(self, oldState, oldAction, newState, reward):
-        new_s = qlearning.array2key(newState[0][:2])
+        new_s = qlearning.array2key(newState[0])
 
         # train q for old state and action in the next actionTrigger
         if (oldState is not None) & (oldAction is not None):
-            old_s = qlearning.array2key(oldState[0][:2]) # inventory
+            old_s = qlearning.array2key(oldState[0]) # inventory
 
             # action = [order qty] + [reorderPoint]
             a = np.append(oldAction[1], oldAction[2, 2])
