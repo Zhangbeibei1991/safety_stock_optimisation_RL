@@ -12,7 +12,7 @@ class DemandAgent():
         return demand
 
 """
-Central Planner
+Central Planner based on Q-Learning
 takes state and action from all agents, make decision on behalf of them
 """
 class Planner():
@@ -57,17 +57,14 @@ class Planner():
         s0Action = action[:, 0]
 
         # ORDER:
-        # More Probability for null (50%)
-        s1MaxOrder = s1State[6] - s1State[0]  # capacity - current inventory
-        s1InventoryLack = max(0, retailerAction[1] - s1State[0])  # gap between customer order and inventory
-        s1ProbOrderNull = 0.2 if s1InventoryLack == 0 else 0
-        s1Action[1] = 0 if np.random.uniform() < s1ProbOrderNull else np.random.choice \
-            (range(int(s1InventoryLack), s1MaxOrder))
-        s0MaxOrder = s0State[6] - s0State[0]  # capacity - current inventory
-        s0InventoryLack = max(0, s1Action[1] - s0State[0])
-        s0ProbOrderNull = 0.2 if s0InventoryLack == 0 else 0
-        s0Action[1] = 0 if np.random.uniform() < s0ProbOrderNull else np.random.choice \
-            (range(int(s0InventoryLack), s0MaxOrder))
+        s1Action[1] = np.random.choice(range(
+            int(retailerAction[1] - s1State[0]), int(s1State[6] - s1State[0])
+        ))
+        s1Action[1] = np.clip(s1Action[1], 0, None)
+        s0Action[1] = np.random.choice(range(
+            int(s1Action[1] - s0State[0]), int(s0State[6] - s0State[0])
+        ))
+        s0Action[1] = np.clip(s0Action[1], 0, None)
 
         # SERVICE TIME : if supplier's inventory > demand, serviceTime = 0
         s0Action[0] = 0 + s0State[5] if s0State[0] < s1Action[1] else 0
@@ -153,3 +150,74 @@ class Planner():
             self.q[(old_s, old_a)] = current_q + self.alpha * (reward + self.gamma * maxQ - current_q)
 
         return
+
+# """
+# Actor-Critic Policy Gradient
+# """
+# from scipy.spatial import distance
+#
+# class ValueEstimator():
+#     def __init__(self, α=0.1):
+#         self.w = np.zeros(3, )  # state dimension is 3
+#         self.α = α
+#
+#         self.v_dw = np.zeros(3, )
+#         self.β = 0.9
+#         self.ε = 1e-10
+#
+#     def predict(self, state):
+#         value = self.w @ state
+#         return value
+#
+#     def update(self, state, target):
+#         value = self.predict(state)
+#
+#         # update w
+#         dloss = 2 * (value - target) * state
+#         # minimize RMSPROP
+#         self.v_dw = self.β * self.v_dw + (1 - self.β) * (dloss ** 2)
+#         self.w -= self.α * dloss / (np.sqrt(self.v_dw) + self.ε)
+#
+#
+# class PolicyEstimator():
+#     def __init__(self, α=0.01):
+#         # assume diagonal covariance
+#         self.θ0 = np.zeros(3,)
+#         self.θ1 = np.zeros(3,)
+#         self.θ2 = np.zeros(3,)
+#         self.σ = 1
+#         self.α = α
+#
+#         self.losses = []
+#
+#         self.v_dθ0 = np.zeros(3,)
+#         self.v_dθ1 = np.zeros(3,)
+#         self.v_dθ2 = np.zeros(3,)
+#         self.β = 0.9
+#         self.ε = 1e-10
+#
+#     def mu_state(self, state):
+#         mu = self.θ @ state
+#
+#         return mu
+#
+#     def predict(self, state):
+#         mu = self.mu_state(state)
+#
+#         action = np.random.multivariate_normal(mu, self.Σ)
+#         action = np.clip(action, env.action_space.low[0], env.action_space.high[0])
+#
+#         return action
+#
+#     def update(self, state, target, action):
+#         mu = self.mu_state(state)
+#         action = self.predict(state)
+#
+#
+#         # update θ
+#         dloss = -np.outer(action-mu, state) * target
+#         # minimize RMSPROP
+#         self.v_dθ = self.β * self.v_dθ + (1 - self.β) * (dloss ** 2)
+#         # element-wise division by sqrt
+#         self.θ -= self.α * dloss / (np.sqrt(self.v_dθ) + self.ε)
+#
