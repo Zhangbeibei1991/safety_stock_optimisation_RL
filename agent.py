@@ -43,20 +43,23 @@ class Planner():
         # state, action of every nodes
         retailerState = state[:, 2]
         retailerAction = action[:, 2]
-
-        # fixed order
-        retailerAction[1] = self.retailerOrder
-        # try random retailerAction
-        # retailerMaxOrder = retailerState[6] - retailerState[0]  # capacity - current inventory
-        # retailerInventoryLack = max(0, demand - retailerState[0])  # gap between customer order and inventory
-        # retailerAction[1] = np.random.choice(range(int(retailerInventoryLack), retailerMaxOrder))
-
         s1State = state[:, 1]
         s1Action = action[:, 1]
         s0State = state[:, 0]
         s0Action = action[:, 0]
 
+        # fixed order
+        retailerAction[1] = self.retailerOrder
+
+        # choose reorder point for next cycle
+        # reorder point up to capacity
+        retailerAction[2] = np.random.choice(range(
+            int(retailerAction[1] + retailerState[0])
+        ))
+
         # ORDER:
+        # action_i+1 - inventory_i <= action_i <= capacity_i - inventory_i
+        # action_i >= 0 (clipped at 0)
         s1Action[1] = np.random.choice(range(
             int(retailerAction[1] - s1State[0]), int(s1State[6] - s1State[0])
         ))
@@ -69,13 +72,6 @@ class Planner():
         # SERVICE TIME : if supplier's inventory > demand, serviceTime = 0
         s0Action[0] = 0 + s0State[5] if s0State[0] < s1Action[1] else 0
         s1Action[0] = s0Action[0] + s1State[5] if s1State[0] < retailerAction[1] else 0
-
-        # choose reorder point for next cycle
-        # reorder point up to capacity
-        # retailerAction[2] = np.random.choice(range(retailerState[6])) # 0 to max capacity
-        # reorder point up to new inventory position
-        newInventoryPosition = int(retailerAction[1] + retailerState[0])
-        retailerAction[2] = np.random.choice(range(newInventoryPosition))
 
         return action
 
@@ -151,73 +147,165 @@ class Planner():
 
         return
 
-# """
-# Actor-Critic Policy Gradient
-# """
-# from scipy.spatial import distance
-#
-# class ValueEstimator():
-#     def __init__(self, α=0.1):
-#         self.w = np.zeros(3, )  # state dimension is 3
-#         self.α = α
-#
-#         self.v_dw = np.zeros(3, )
-#         self.β = 0.9
-#         self.ε = 1e-10
-#
-#     def predict(self, state):
-#         value = self.w @ state
-#         return value
-#
-#     def update(self, state, target):
-#         value = self.predict(state)
-#
-#         # update w
-#         dloss = 2 * (value - target) * state
-#         # minimize RMSPROP
-#         self.v_dw = self.β * self.v_dw + (1 - self.β) * (dloss ** 2)
-#         self.w -= self.α * dloss / (np.sqrt(self.v_dw) + self.ε)
-#
-#
-# class PolicyEstimator():
-#     def __init__(self, α=0.01):
-#         # assume diagonal covariance
-#         self.θ0 = np.zeros(3,)
-#         self.θ1 = np.zeros(3,)
-#         self.θ2 = np.zeros(3,)
-#         self.σ = 1
-#         self.α = α
-#
-#         self.losses = []
-#
-#         self.v_dθ0 = np.zeros(3,)
-#         self.v_dθ1 = np.zeros(3,)
-#         self.v_dθ2 = np.zeros(3,)
-#         self.β = 0.9
-#         self.ε = 1e-10
-#
-#     def mu_state(self, state):
-#         mu = self.θ @ state
-#
-#         return mu
-#
-#     def predict(self, state):
-#         mu = self.mu_state(state)
-#
-#         action = np.random.multivariate_normal(mu, self.Σ)
-#         action = np.clip(action, env.action_space.low[0], env.action_space.high[0])
-#
-#         return action
-#
-#     def update(self, state, target, action):
-#         mu = self.mu_state(state)
-#         action = self.predict(state)
-#
-#
-#         # update θ
-#         dloss = -np.outer(action-mu, state) * target
-#         # minimize RMSPROP
-#         self.v_dθ = self.β * self.v_dθ + (1 - self.β) * (dloss ** 2)
-#         # element-wise division by sqrt
-#         self.θ -= self.α * dloss / (np.sqrt(self.v_dθ) + self.ε)
-#
+"""
+Actor-Critic Policy Gradient
+"""
+class ValueEstimator():
+    def __init__(self, α=0.1):
+        self.w = np.zeros(3, )  # state dimension is 3
+        self.α = α
+
+        self.v_dw = np.zeros(3, )
+        self.β = 0.9
+        self.ε = 1e-10
+
+    def predict(self, s):
+        value = self.w @ s
+        return value
+
+    def update(self, s, target):
+        value = self.predict(s)
+
+        # update w
+        dloss = 2 * (value - target) * s
+        # minimize RMSPROP
+        self.v_dw = self.β * self.v_dw + (1 - self.β) * (dloss ** 2)
+        self.w -= self.α * dloss / (np.sqrt(self.v_dw) + self.ε)
+
+
+class PolicyEstimator():
+    def __init__(self, α=0.01):
+        # assume diagonal covariance
+        self.θ = np.zeros((3, 3))
+        self.σ = 20
+        self.α = α
+
+        self.losses = []
+
+        self.v_dθ = np.zeros((3, 3))
+        self.β = 0.9
+        self.ε = 1e-10
+
+    def predict(self, s, capacity, retailerOrderQty):
+        # mu = self.mu_state(state)
+
+        """
+        decide in this order:
+        1. reorder point for retailer
+        2. order for node 1
+        3. order for node 0
+        """
+
+        # capacity = state[6]
+        # retailerOrderQty = self.retailerOrder
+        # s = state[0]  # inventory
+
+        a = [np.nan, np.nan, np.nan]
+        mu = [np.nan, np.nan, np.nan]
+        # choose reorder point for next cycle
+        # reorder point up to capacity
+        mu[2] = self.θ[2] @ s
+        a[2] = np.random.normal(mu[2], self.σ)
+        a[2] = np.clip(a[2], 0, int(retailerOrderQty + s[2]))
+
+        mu[1] = self.θ[1] @ s
+        a[1] = np.random.normal(mu[1], self.σ)
+        a[1] = np.clip(a[1], retailerOrderQty-s[1], capacity[1]-s[1])
+        a[1] = np.clip(a[1], 0, None)  # limit to 0
+
+        mu[0] = self.θ[0] @ s
+        a[0] = np.random.normal(mu[0], self.σ)
+        a[0] = np.clip(a[0], a[1]-s[0], capacity[0]-s[0])
+        a[0] = np.clip(a[0], 0, None)  # limit to 0
+
+        return mu, a
+
+    def update(self, s, target, a, capacity, retailerOrderQty):
+        # TODO: old mu must be stored
+        # decide parameter
+        mu, _ = self.predict(s, capacity, retailerOrderQty)
+
+        # update θ
+        dloss = -np.outer(a - mu, s) * target
+        # minimize RMSPROP
+        self.v_dθ = self.β * self.v_dθ + (1 - self.β) * (dloss ** 2)
+        # element-wise division by sqrt
+        self.θ -= self.α * dloss / (np.sqrt(self.v_dθ) + self.ε)
+
+
+class PlannerWithPolicyGradient():
+    def __init__(self, learningParams, retailerOrder):
+        # create policy and actor
+        self.policy_estimator = PolicyEstimator(α=0.001)
+        self.value_estimator = ValueEstimator(α=0.1)
+
+        # learning params
+        # self.alpha = learningParams["alpha"]
+        # self.epsilon = learningParams["epsilon"]
+        # self.gamma = learningParams["gamma"]
+        self.discount_factor = 0.95
+
+        self.retailerOrder = retailerOrder
+
+    def resetAction(self):
+        action = np.array([
+            [np.nan, np.nan, 0],  # serviceTime
+            [0, 0, 0],  # orderToSupplier
+            [np.nan, np.nan, np.nan] # reorderPoint
+        ])
+
+        return action
+
+    def takeAction(self, state, demand):
+
+        # state for actor-critic
+        s = state[0]
+        capacity = state[6]
+        _, a = self.policy_estimator.predict(s, capacity, self.retailerOrder)
+
+        # initiate action
+        action = self.resetAction()
+
+        # state, action of every nodes
+        retailerState = state[:, 2]
+        retailerAction = action[:, 2]
+        s1State = state[:, 1]
+        s1Action = action[:, 1]
+        s0State = state[:, 0]
+        s0Action = action[:, 0]
+
+        # fixed order
+        retailerAction[1] = self.retailerOrder
+
+        # choose reorder point for next cycle
+        retailerAction[2] = a[2]
+        s1Action[1] = a[1]
+        s0Action[1] = a[0]
+
+        # SERVICE TIME : if supplier's inventory > demand, serviceTime = 0
+        s0Action[0] = 0 + s0State[5] if s0State[0] < s1Action[1] else 0
+        s1Action[0] = s0Action[0] + s1State[5] if s1State[0] < retailerAction[1] else 0
+
+        return action
+
+    def train(self, oldState, oldAction, newState, reward):
+
+        # train for old state and action in the next actionTrigger
+        if (oldState is not None) & (oldAction is not None):
+            new_s = newState[0]
+            old_s = oldState[0] # inventory
+            old_a = np.append(oldAction[1, :2], oldAction[2, 2])
+
+            # calculate TD target
+            value_now = self.value_estimator.predict(old_s)
+            value_next = self.value_estimator.predict(new_s)
+            td_target = reward + self.discount_factor * value_next
+            td_error = td_target - value_now
+
+            # update the value estimator
+            self.value_estimator.update(old_s, td_target)
+            # update the policy estimator
+            capacity = oldState[6]
+            self.policy_estimator.update(old_s, td_error, old_a, capacity, self.retailerOrder)
+
+        return

@@ -9,9 +9,6 @@ def runEpisode(envParams, plannerAgent, train=True):
     # create demand agent
     demandAgent = agent.DemandAgent(envParams["muDemand"], envParams["stdDemand"])
 
-    # # create central planner
-    # plannerAgent = agent.Planner(learningParams, envParams["retailerOrder"])
-
     # initial state
     state = np.array([
         [0, 0, 10],  # inventory
