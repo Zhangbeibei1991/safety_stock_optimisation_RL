@@ -328,7 +328,9 @@ import tensorflow_probability as tfp
 
 class PolicyEstimator():
     def __init__(self, α=0.01):
-        self.stdVal = 5  # default standard deviation for exploration
+        self.targetRecorder = [] # record distribution of target
+        # must be high enough to explore the search space
+        self.stdVal = 10  # default standard deviation for exploration
 
         inputs = Input(shape=(4,))
         capacity = Input(shape=(3,))
@@ -363,15 +365,15 @@ class PolicyEstimator():
         c0, c1, c2 = tf.split(capacity, 3, axis=-1)
 
         # TODO: don't clip the reorder point
-        a2 = tf.clip_by_value(a2, 0, 10) #5)  # retailerOrderQty + s2)
-        a2 = tf.math.floor(a2)
+        a2 = tf.clip_by_value(a2, 0, 6)  # retailerOrderQty + s2)
+        a2 = tf.math.round(a2) #tf.math.floor(a2)
         a2 = tf.clip_by_value(a2, 0, c2 - s2)  # limit capacity
         a1 = tf.clip_by_value(a1, retailerOrderQty - s1, c1 - s1)
-        a1 = tf.math.floor(a1)
+        a1 = tf.math.round(a1) #tf.math.floor(a1)
         a0 = tf.clip_by_value(a0, a1 - s0, c0 - s0)
-        a0 = tf.math.floor(a0)
+        a0 = tf.math.round(a0) #tf.math.floor(a0)
         a = tf.concat([a0, a1, a2], axis=-1)
-        #         a = tf.clip_by_value(a, 0, 30)
+        a = tf.clip_by_value(a, 0, 30)
 
         # consider training in a batch for 1-episode, speed up
         self.model = Model(inputs=[inputs, std, capacity, retailerOrderQty, prevAction, target], outputs=[mu, a])
@@ -402,8 +404,11 @@ class PolicyEstimator():
         target = np.array([target])
         std = np.array([[self.stdVal, self.stdVal, self.stdVal]])
 
+        # record target
+        self.targetRecorder.append(target[0])
         # exponent
-        target = 10 * np.exp(target / 10000)
+        # target = 10 * np.exp(target / 2000)
+        target = 10 * np.exp((target-1000) / 1000)
         # rescale
         # target /= 100
         # clip gradient
