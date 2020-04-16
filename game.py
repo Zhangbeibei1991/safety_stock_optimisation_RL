@@ -24,6 +24,7 @@ def runEpisode(envParams, plannerAgent, train=True):
     stateHistory = [state]
     actionHistory = [plannerAgent.resetAction()]
     rewardHistory = [np.nan]
+    experiences = []
 
     # keep track of old state and action
     oldState = None
@@ -82,6 +83,8 @@ def runEpisode(envParams, plannerAgent, train=True):
             if train:
                 plannerAgent.train(oldState, oldAction, state1, reward)
 
+            experiences.append([oldState, oldAction, state1, reward])
+
             # keep track of current state and action
             oldState = state1
             oldAction = action
@@ -106,4 +109,4 @@ def runEpisode(envParams, plannerAgent, train=True):
         stateHistory = np.append(stateHistory, [state], axis=0)
         actionHistory = np.append(actionHistory, [action], axis=0)
 
-    return (stateHistory, actionHistory, rewardHistory)
+    return (stateHistory, actionHistory, rewardHistory, experiences)

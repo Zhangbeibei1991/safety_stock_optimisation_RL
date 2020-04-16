@@ -40,7 +40,7 @@ class Environment():
             # set inventory to zero
             retailerState[0] = 0
 
-        # trigger for taking action: retailer's inventory < reorderPoint & not waiting for any delivery
+        # trigger for aking action: retailer's inventory < reorderPoint & not waiting for any delivery
         actionTrigger = (retailerState[0] <= retailerState[1]) & (retailerState[3] == 0)
 
         # get rewards
