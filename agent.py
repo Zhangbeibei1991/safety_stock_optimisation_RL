@@ -364,7 +364,6 @@ class PolicyEstimator():
         a0, a1, a2 = tf.split(aRaw, 3, axis=-1)
         c0, c1, c2 = tf.split(capacity, 3, axis=-1)
 
-        # TODO: don't clip the reorder point
         a2 = tf.clip_by_value(a2, 0, 6)  # retailerOrderQty + s2)
         a2 = tf.math.round(a2) #tf.math.floor(a2)
         a2 = tf.clip_by_value(a2, 0, c2 - s2)  # limit capacity

@@ -1,0 +1,4 @@
+,inventoryCost,muDemand,stdDemand,retailerOrder,stockoutCost,N
+0,1000,2,0.1,10,10000,1000
+1,5,2,0.1,10,10000,1000
+2,1000,2,0.1,10,10000,1000
